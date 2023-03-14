@@ -41,6 +41,8 @@ oauth_settings = OAuthSettings(
     client_id=os.environ["SLACK_CLIENT_ID"],
     client_secret=os.environ["SLACK_CLIENT_SECRET"],
     install_path="/slack/install",
+    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write","commands", "groups:history", "im:write","reactions:read", "files:write"],
+    user_scopes=["admin","channels:history", "chat:write"],
     redirect_uri_path="/slack/oauth_redirect",
     installation_store= FileInstallationStore(base_dir="./data/installations"),
     state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
@@ -714,6 +716,13 @@ def list_test_suite():
 def slack_interactive_endpoint():
     return handler.handle(request)
 
+@flask_app.route("/slack/oauth_redirect", methods=["GET"])
+def oauth_redirect():
+    return handler.handle(request)
+
+@flask_app.route("/slack/install", methods=["GET"])
+def slack_install():
+    return handler.handle(request)
 
 if __name__ == '__main__':
     flask_app.run(host='0.0.0.0', port=5000, debug=True)
