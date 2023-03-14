@@ -24,9 +24,9 @@ from slack_sdk.oauth.installation_store import FileInstallationStore, Installati
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 
 # Issue and consume state parameter value on the server-side.
-state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data")
+#state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data")
 # Persist installation data and lookup it by IDs.
-installation_store = FileInstallationStore(base_dir="./data")
+#installation_store = FileInstallationStore(base_dir="/data/installations")
 
 # Build https://slack.com/oauth/v2/authorize with sufficient query parameters
 # authorize_url_generator = AuthorizeUrlGenerator(
@@ -37,10 +37,19 @@ installation_store = FileInstallationStore(base_dir="./data")
 
 from flask import Flask, request, make_response
 
+oauth_settings = OAuthSettings(
+    client_id=os.environ["SLACK_CLIENT_ID"],
+    client_secret=os.environ["SLACK_CLIENT_SECRET"],
+    install_path="/slack/install",
+    redirect_uri_path="/slack/oauth/callback",
+    installation_store= FileInstallationStore(base_dir="./data/installations"),
+    state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
+    
+)
 
 app = App(
     signing_secret=os.environ["SLACK_SIGNING_SECRET"]
-    #oauth_settings=oauth_settings,
+    oauth_settings=oauth_settings,
        
 )
 
@@ -626,80 +635,72 @@ from slack_sdk.web import WebClient
 client_secret = os.environ["SLACK_CLIENT_SECRET"]
 
 
-@flask_app.route("/slack/oauth/callback", methods=["GET"])
-def oauth_callback():
-    args = request.args
-    print("Yes1")
+# @flask_app.route("/slack/oauth/callback", methods=["GET"])
+# def oauth_callback():
+#     args = request.args
+#     print("Yes1")
    
-    if "code" in request.args:
+#     if "code" in request.args:
        
-        if state_store.consume(request.args["state"]):
-            client = WebClient() 
+#         if state_store.consume(request.args["state"]):
+#             client = WebClient() 
             
-            oauth_response = client.oauth_v2_access(
-                client_id="3758031487061.4566211234965",
-                client_secret=client_secret,
-                redirect_uri="https://54.147.129.186/slack/oauth/callback",
-                code=request.args["code"]
-            )
+#             oauth_response = client.oauth_v2_access(
+#                 client_id="3758031487061.4566211234965",
+#                 client_secret=client_secret,
+#                 redirect_uri="https://54.147.129.186/slack/oauth/callback",
+#                 code=request.args["code"]
+#             )
 
-            installed_enterprise = oauth_response.get("enterprise", {})
-            is_enterprise_install = oauth_response.get("is_enterprise_install")
-            installed_team = oauth_response.get("team", {})
-            installer = oauth_response.get("authed_user", {})
-            incoming_webhook = oauth_response.get("incoming_webhook", {})
+#             installed_enterprise = oauth_response.get("enterprise", {})
+#             is_enterprise_install = oauth_response.get("is_enterprise_install")
+#             installed_team = oauth_response.get("team", {})
+#             installer = oauth_response.get("authed_user", {})
+#             incoming_webhook = oauth_response.get("incoming_webhook", {})
 
-            bot_token = oauth_response.get("access_token")
+#             bot_token = oauth_response.get("access_token")
            
-            bot_id = None
-            enterprise_url = None
-            if bot_token is not None:
-                auth_test = client.auth_test(token=bot_token)
-                bot_id = auth_test["bot_id"]
-                if is_enterprise_install is True:
-                    enterprise_url = auth_test.get("url")
+#             bot_id = None
+#             enterprise_url = None
+#             if bot_token is not None:
+#                 auth_test = client.auth_test(token=bot_token)
+#                 bot_id = auth_test["bot_id"]
+#                 if is_enterprise_install is True:
+#                     enterprise_url = auth_test.get("url")
 
-            installation = Installation(
-                app_id=oauth_response.get("app_id"),
-                enterprise_id=installed_enterprise.get("id"),
-                enterprise_name=installed_enterprise.get("name"),
-                enterprise_url=enterprise_url,
-                team_id=installed_team.get("id"),
-                team_name=installed_team.get("name"),
-                bot_token=bot_token,
-                bot_id=bot_id,
-                bot_user_id=oauth_response.get("bot_user_id"),
-                bot_scopes=oauth_response.get("scope"), 
-                user_id=installer.get("id"),
-                user_token=installer.get("access_token"),
-                user_scopes=installer.get("scope"),  
-                incoming_webhook_url=incoming_webhook.get("url"),
-                incoming_webhook_channel=incoming_webhook.get("channel"),
-                incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
-                incoming_webhook_configuration_url=incoming_webhook.get("configuration_url"),
-                is_enterprise_install=is_enterprise_install,
-                token_type=oauth_response.get("token_type"),
-            )
+#             installation = Installation(
+#                 app_id=oauth_response.get("app_id"),
+#                 enterprise_id=installed_enterprise.get("id"),
+#                 enterprise_name=installed_enterprise.get("name"),
+#                 enterprise_url=enterprise_url,
+#                 team_id=installed_team.get("id"),
+#                 team_name=installed_team.get("name"),
+#                 bot_token=bot_token,
+#                 bot_id=bot_id,
+#                 bot_user_id=oauth_response.get("bot_user_id"),
+#                 bot_scopes=oauth_response.get("scope"), 
+#                 user_id=installer.get("id"),
+#                 user_token=installer.get("access_token"),
+#                 user_scopes=installer.get("scope"),  
+#                 incoming_webhook_url=incoming_webhook.get("url"),
+#                 incoming_webhook_channel=incoming_webhook.get("channel"),
+#                 incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
+#                 incoming_webhook_configuration_url=incoming_webhook.get("configuration_url"),
+#                 is_enterprise_install=is_enterprise_install,
+#                 token_type=oauth_response.get("token_type"),
+#             )
 
-            # Store the installation
-            installation_store.save(installation)
+#             # Store the installation
+#             installation_store.save(installation)
 
-            return "Thanks for installing this app!"
-        else:
-            return make_response(f"Try the installation again (the state value is already expired)", 400)
+#             return "Thanks for installing this app!"
+#         else:
+#             return make_response(f"Try the installation again (the state value is already expired)", 400)
 
-    error = request.args["error"] if "error" in request.args else ""
-    return make_response(f"Something is wrong with the installation (error: {error})", 400)
+#     error = request.args["error"] if "error" in request.args else ""
+#     return make_response(f"Something is wrong with the installation (error: {error})", 400)
 
-# oauth_settings = OAuthSettings(
-#     client_id=os.environ["SLACK_CLIENT_ID"],
-#     client_secret=os.environ["SLACK_CLIENT_SECRET"],
-#     install_path="/slack/install",
-#     redirect_uri_path="/slack/oauth",
-#     installation_store= FileInstallationStore(base_dir="./data/installations"),
-#     state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
-    
-# )
+
 
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
