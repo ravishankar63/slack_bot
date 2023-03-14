@@ -639,7 +639,7 @@ def oauth_callback():
             oauth_response = client.oauth_v2_access(
                 client_id="3758031487061.4566211234965",
                 client_secret=client_secret,
-                redirect_uri="https://ac77-2406-7400-c4-831c-f98a-bc81-6935-fc4b.in.ngrok.io/slack/oauth/callback",
+                redirect_uri="https://54.147.129.186/slack/oauth/callback",
                 code=request.args["code"]
             )
 
