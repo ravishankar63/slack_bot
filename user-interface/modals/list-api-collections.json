@@ -1,0 +1,126 @@
+{
+	"title": {
+		"type": "plain_text",
+		"text": "List API Collections",
+		"emoji": true
+	},
+	"submit": {
+		"type": "plain_text",
+		"text": "Submit",
+		"emoji": true
+	},
+	"callback_id": "list-api-collections",
+	"type": "modal",
+	"close": {
+		"type": "plain_text",
+		"text": "Cancel",
+		"emoji": true
+	},
+	"blocks": [
+		{
+			"type": "section",
+			"block_id": "selectconv",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Pick a conversation from the dropdown list"
+			},
+			"accessory": {
+				"action_id": "convtext",
+				"type": "conversations_select",
+				"placeholder": {
+					"type": "plain_text",
+					"text": "Select an item"
+				}
+			}
+		},
+		{
+			"type": "input",
+			"block_id": "selectworkspace",
+			"element": {
+				"type": "static_select",
+				"placeholder": {
+					"type": "plain_text",
+					"text": "Select an item",
+					"emoji": true
+				},
+				"options": [
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Default"
+						},
+						"value": "fb3a34f0-77bd-11ed-85ba-0242ac130003"
+					},
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Customers-Visits WS"
+						},
+						"value": "5723e833-d9a1-4597-8cea-32852cf9c1a3"
+					}
+				],
+				"action_id": "static_select-action"
+			},
+			"label": {
+				"type": "plain_text",
+				"text": "Select Workspace",
+				"emoji": true
+			}
+		},
+		{
+			"type": "input",
+			"block_id": "selectpage",
+			"element": {
+				"type": "static_select",
+				"placeholder": {
+					"type": "plain_text",
+					"text": "Select the page you want to see",
+					"emoji": true
+				},
+				"options": [
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Page 1"
+						},
+						"value": "1"
+					},
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Page 2"
+						},
+						"value": "2"
+					},
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Page 3"
+						},
+						"value": "3"
+					},
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Page 4"
+						},
+						"value": "4"
+					},
+					{
+						"text": {
+							"type": "plain_text",
+							"text": "Page 5"
+						},
+						"value": "5"
+					}
+				],
+				"action_id": "static_select-action"
+			},
+			"label": {
+				"type": "plain_text",
+				"text": "Select Page",
+				"emoji": true
+			}
+		}
+	]
+}

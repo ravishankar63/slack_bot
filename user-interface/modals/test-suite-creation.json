@@ -1,0 +1,315 @@
+{
+    "title": {
+        "type": "plain_text",
+        "text": "Create Test Collection",
+        "emoji": true
+    },
+    "submit": {
+        "type": "plain_text",
+        "text": "Create",
+        "emoji": true
+    },
+    "callback_id": "test-suite-create",
+    "type": "modal",
+    "close": {
+        "type": "plain_text",
+        "text": "Cancel",
+        "emoji": true
+    },
+    "blocks": [
+        {
+            "type": "actions",
+            "block_id": "workspace",
+            "elements": [
+                {
+                    "type": "static_select",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Select Workspace",
+                        "emoji": true
+                    },
+                    "options": [
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": "Default"
+                            },
+                            "value": "fb3a34f0-77bd-11ed-85ba-0242ac130003"
+                        },
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": "Customers-Visits WS"
+                            },
+                            "value": "5723e833-d9a1-4597-8cea-32852cf9c1a3"
+                        }
+                    ],
+                    "action_id": "select-workspace-create-test-suite"
+                }
+            ]
+        },
+        {
+            "type": "input",
+            "block_id": "apicollection",
+            "element": {
+                "type": "static_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select api collection",
+                    "emoji": true
+                },
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Dummy collection",
+                            "emoji": true
+                        },
+                        "value": "value-0"
+                    }
+                ],
+                "action_id": "static_select-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "API Collection",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "tags",
+            "element": {
+                "type": "multi_static_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select options",
+                    "emoji": true
+                },
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Regression"
+                        },
+                        "value": "ff01ea46-85c8-4382-9132-d03c682ab973"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "tag1"
+                        },
+                        "value": "d025d745-3b46-402d-b043-416b8a3bd5c8"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "test"
+                        },
+                        "value": "74012434-4f35-4d3a-a49e-c753cfe93bff"
+                    }
+                ],
+                "action_id": "multi_static_select-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Tags",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "testsuitename",
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "plain_text_input-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Test Suite Name",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "testcaseprefix",
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "plain_text_input-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Test Case Prefix",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "description",
+            "element": {
+                "type": "plain_text_input",
+                "multiline": true,
+                "action_id": "plain_text_input-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Description",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "deduplicaterequests",
+            "element": {
+                "type": "radio_buttons",
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Yes",
+                            "emoji": true
+                        },
+                        "value": "True"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "No",
+                            "emoji": true
+                        },
+                        "value": "False"
+                    }
+                ],
+                "action_id": "radio_buttons-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "De-duplicate requests",
+                "emoji": true
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Assertions",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "includestatuscode",
+            "element": {
+                "type": "radio_buttons",
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Yes",
+                            "emoji": true
+                        },
+                        "value": "true"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "No",
+                            "emoji": true
+                        },
+                        "value": "false"
+                    }
+                ],
+                "action_id": "radio_buttons-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Include Status Code",
+                "emoji": true
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Response Content",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "allparameters",
+            "element": {
+                "type": "radio_buttons",
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Yes",
+                            "emoji": true
+                        },
+                        "value": "true"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "No",
+                            "emoji": true
+                        },
+                        "value": "false"
+                    }
+                ],
+                "action_id": "radio_buttons-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "All Parameters",
+                "emoji": true
+            }
+        },
+        {
+            "type": "input",
+            "block_id": "options",
+            "element": {
+                "type": "radio_buttons",
+                "options": [
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Schema Only",
+                            "emoji": true
+                        },
+                        "value": "True"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Ignore Identifiers",
+                            "emoji": true
+                        },
+                        "value": "True"
+                    },
+                    {
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Ignore Timestamps",
+                            "emoji": true
+                        },
+                        "value": "True"
+                    }
+                ],
+                "action_id": "radio_buttons-action"
+            },
+            "label": {
+                "type": "plain_text",
+                "text": "Select required",
+                "emoji": true
+            }
+        }
+    ]
+}
