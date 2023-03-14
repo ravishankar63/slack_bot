@@ -41,14 +41,14 @@ oauth_settings = OAuthSettings(
     client_id=os.environ["SLACK_CLIENT_ID"],
     client_secret=os.environ["SLACK_CLIENT_SECRET"],
     install_path="/slack/install",
-    redirect_uri_path="/slack/oauth/callback",
+    redirect_uri_path=None,
     installation_store= FileInstallationStore(base_dir="./data/installations"),
     state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
     
 )
 
 app = App(
-    signing_secret=os.environ["SLACK_SIGNING_SECRET"]
+    signing_secret=os.environ["SLACK_SIGNING_SECRET"],
     oauth_settings=oauth_settings,
        
 )
