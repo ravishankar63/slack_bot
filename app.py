@@ -56,7 +56,7 @@ app = App(
        
 )
 
-headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJmNzcxZjk5YS0zZGYwLTRjYmEtOTUyZC1lZmYzZTgxYTU2NzciLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTIxVDA2OjE2OjMyLjYwOTYzMTY4NFoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yMlQwNjoxNjozMi42MDk2MzE5NjNaIn0.gqrv7CWk_617pEooWwnU-C_b70OLRGkw3gZsYRpVe4w'}
+headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJjMGRiM2EwZS1jOTYwLTQzZWUtOThiNC1jMTBhMGJkOWIzOWQiLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTI0VDA1OjE0OjU4Ljk0NTU3ODY0MVoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yNVQwNToxNDo1OC45NDU1NzkxMjNaIn0.QrLe4ccjb203bNsWiVHEjK5fndKGAKZHddPEchit9kI'}
 
 @app.middleware  # or app.use(log_request)
 def log_request(logger, body, next):
@@ -617,10 +617,15 @@ def handle_submission(ack, body, client, view,say, respond):
     client.chat_postMessage(channel=channel_id, text="```\n" + md_table + "```\n")
 
 @app.event("app_home_opened")
-def home_content(event, client):
-    user_id = event["user"]
-    client.views_publish(
-        user_id=user_id, view=open('./user-interface/modals/app-home.json'))
+def handle_app_home_opened_events(body, logger, say):
+    logger.info(body)
+    say("Hi! I'm Tyke Bot. Please check shortcuts to explore my functions.")
+
+# @app.event("app_home_opened")
+# def home_content(event, client):
+#     user_id = event["user"]
+#     client.views_publish(
+#         user_id=user_id, view=open('./user-interface/modals/app-home.json'))
 
 
 
