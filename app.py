@@ -338,7 +338,7 @@ def open_modal(ack, logger,body, client):
     views = json.load(open('./user-interface/modals/list-test-suite.json'))
     # print(views['blocks'][0]['elements'][0]['options'])
 
-    views['blocks'][1]['element']['options'] = list(map(lambda x: {
+    views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
@@ -359,7 +359,7 @@ def handle_submission(ack, body, client, view,say, respond):
     ack()
     workspace_id= selected_values['selectworkspace']['static_select-action']['selected_option']['value']
     page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
-    channel_id = selected_values['selectconv']['convtext']['selected_conversation']
+    channel_id = body['channel_id']
     #print(channel_id)
     try:
         testsuite_res = requests.get(url=API_GET_TEST_SUITE_BY_PAGE+ f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
