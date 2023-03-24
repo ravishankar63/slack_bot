@@ -338,7 +338,7 @@ def open_modal(ack, logger,body, client):
     views = json.load(open('./user-interface/modals/list-test-suite.json'))
     # print(views['blocks'][0]['elements'][0]['options'])
 
-    views['blocks'][1]['element'][0]['options'] = list(map(lambda x: {
+    views['blocks'][1]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
