@@ -49,13 +49,14 @@ oauth_settings = OAuthSettings(
     
 )
 
+
 app = App(
     signing_secret=os.environ["SLACK_SIGNING_SECRET"],
     oauth_settings=oauth_settings,
        
 )
 
-headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImZiM2ExMzlmLTc3YmQtMTFlZC04NWJhLTAyNDJhYzEzMDAwMyIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiI0ZjI4ODZkMS02MTEyLTQ3NjMtOWIyOS0zZTcwNTliYmQ2OWYiLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAyLTEyVDE2OjE5OjAzLjU1MzMwODk5NFoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMi0yN1QxNjoxOTowMy41NTMzMDkyMDJaIn0.GKNy4EEqUZO7VNtVjHxywl7YvgBX-6mjczuggjKzq9E'}
+headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJmNzcxZjk5YS0zZGYwLTRjYmEtOTUyZC1lZmYzZTgxYTU2NzciLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTIxVDA2OjE2OjMyLjYwOTYzMTY4NFoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yMlQwNjoxNjozMi42MDk2MzE5NjNaIn0.gqrv7CWk_617pEooWwnU-C_b70OLRGkw3gZsYRpVe4w'}
 
 @app.middleware  # or app.use(log_request)
 def log_request(logger, body, next):
@@ -184,7 +185,7 @@ def handle_submission(ack, body, client, view, logger):
     payload = {'name': testsuitename,
                'testcase_prefix': selected_values['testcaseprefix']['plain_text_input-action']['value'],
                'description': selected_values['description']['plain_text_input-action']['value'],
-               'workspace_id': selected_values['workspace']['select-workspace']['selected_option']['value'],
+               'workspace_id': selected_values['workspace']['select-workspace-create-test-suiteß']['selected_option']['value'],
                'deduplicate_requests': selected_values['deduplicaterequests']['radio_buttons-action']['selected_option']['value'] == 'True',
                'duplicate': True,
                'assertions': assertions,
@@ -615,6 +616,11 @@ def handle_submission(ack, body, client, view,say, respond):
     blocks['blocks'][0]['text']['text']= "```\n" + md_table + "```\n"
     client.chat_postMessage(channel=channel_id, text="```\n" + md_table + "```\n")
 
+@app.event("app_home_opened")
+def home_content(event, client):
+    user_id = event["user"]
+    client.views_publish(
+        user_id=user_id, view=open('./user-interface/modals/app-home.json'))
 
 
 
@@ -726,6 +732,7 @@ def slack_install():
 
 
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=5000, debug=True)
+    flask_app.run(host='0.0.0.0', port=5000)
+    #flask_app.run(host='0.0.0.0', port=5000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
 
 # Start your app

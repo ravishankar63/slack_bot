@@ -1,4 +1,4 @@
-URL= "https://beta.tyke.ai:3000"
+URL= "https://dev.tyke.ai:3000"
 API_GET_WORKSPACES = f"{URL}/api/workspace?mini=true&" 
 API_GET_API_COLLECTIONS = f"{URL}/api/collection?workspace_id="
 API_GET_TAGS = f"{URL}/api/tag?resource_type=testsuite&"

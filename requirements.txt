@@ -1,0 +1,4 @@
+flask
+slack_bolt
+pandas
+python-dotenv

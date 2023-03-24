@@ -1,0 +1,14 @@
+{
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Welcome to tyke bot! Tyke is akin to having ChatGPT for API testing. You can kick start your testing journey with our slack shortcuts."
+			}
+		},
+		{
+			"type": "divider"
+		}
+	]
+}
