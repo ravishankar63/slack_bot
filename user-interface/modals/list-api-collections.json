@@ -17,22 +17,7 @@
 		"emoji": true
 	},
 	"blocks": [
-		{
-			"type": "section",
-			"block_id": "selectconv",
-			"text": {
-				"type": "mrkdwn",
-				"text": "Pick a conversation from the dropdown list"
-			},
-			"accessory": {
-				"action_id": "convtext",
-				"type": "conversations_select",
-				"placeholder": {
-					"type": "plain_text",
-					"text": "Select an item"
-				}
-			}
-		},
+
 		{
 			"type": "input",
 			"block_id": "selectworkspace",

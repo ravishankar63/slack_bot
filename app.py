@@ -592,7 +592,7 @@ def open_modal(ack, respond,shortcut, client):
     views = json.load(open('./user-interface/modals/list-api-collections.json'))
     # print(views['blocks'][0]['elements'][0]['options'])
 
-    views['blocks'][0]['element'][0]['options'] = list(map(lambda x: {
+    views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
@@ -609,20 +609,18 @@ def open_modal(ack, respond,shortcut, client):
 def handle_submission(ack, body, client, view,say, respond):
 
     selected_values = view["state"]["values"]
-    user = body["user"]["id"]
+    user_id = body["user"]["id"]
     #print(selected_values)
     # Validate the inputs
     ack()
     workspace_id= selected_values['selectworkspace']['static_select-action']['selected_option']['value']
     page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
-    channel_id = selected_values['selectconv']['convtext']['selected_conversation']
     #print(channel_id)
     try:
         apicollec_res = requests.get(url=API_GET_API_COLLECTIONS+ f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
         #print(apicollec_res.json()['data'])
     except:
         print("An exception occurred")
-    print(selected_values['selectconv'])
 
     apicollecdf= pd.json_normalize(apicollec_res.json()['data'])
     apicollecdf=apicollecdf[['name', 'description','collection.name','total_test_cases','execution_count']]
@@ -631,7 +629,7 @@ def handle_submission(ack, body, client, view,say, respond):
     #say(channel=channel_id, text="Done")
     blocks = json.load(open('./user-interface/modals/list-test-suite-blocks.json'))
     blocks['blocks'][0]['text']['text']= "```\n" + md_table + "```\n"
-    client.chat_postMessage(channel=channel_id, text="```\n" + md_table + "```\n")
+    client.chat_postMessage(channel=user_id, text="```\n" + md_table + "```\n")
 
 @app.event("app_home_opened")
 def handle_app_home_opened_events(body, logger, client):
