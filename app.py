@@ -620,7 +620,7 @@ def handle_submission(ack, body, client, view,say, respond):
 def handle_app_home_opened_events(body, logger, client):
     logger.info(body['event']['user'])
     client.views_publish(
-        user_id=body['event']['user'], view=open('./user-interface/modals/app-home.json'))
+        user_id=body['event']['user'], view=json.load(open('./user-interface/modals/app-home.json')))
 
 
 # @app.event("app_home_opened")
@@ -739,7 +739,7 @@ def slack_install():
 
 
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=5000)
-    #flask_app.run(host='0.0.0.0', port=5000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
+    #flask_app.run(host='0.0.0.0', port=5000)
+    flask_app.run(host='0.0.0.0', port=5000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
 
 # Start your app
