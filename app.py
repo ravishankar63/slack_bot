@@ -353,29 +353,27 @@ def open_modal(ack, logger,body, client):
 def handle_submission(ack, body, client, view,say, respond):
 
     selected_values = view["state"]["values"]
-    user = body["user"]["id"]
+    user_id = body["user"]["id"]
     #print(selected_values)
     # Validate the inputs
     ack()
     workspace_id= selected_values['selectworkspace']['static_select-action']['selected_option']['value']
-    page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
-    channel_id = body['channel_id']
+    page_no= selected_values['selectpage']['static_select-action']['selected_option']['value']
     #print(channel_id)
     try:
         testsuite_res = requests.get(url=API_GET_TEST_SUITE_BY_PAGE+ f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
         #print(testsuite_res.json()['data'])
     except:
         print("An exception occurred")
-    print(selected_values['selectconv'])
 
     testsuitedf= pd.json_normalize(testsuite_res.json()['data'])
     testsuitedf=testsuitedf[['name', 'description','collection.name','total_test_cases','execution_count']]
     md_table = testsuitedf.to_markdown()
-    print(testsuitedf.head())
+    
     #say(channel=channel_id, text="Done")
     blocks = json.load(open('./user-interface/modals/list-test-suite-blocks.json'))
     blocks['blocks'][0]['text']['text']= "```\n" + md_table + "```\n"
-    client.chat_postMessage(channel=channel_id, text="```\n" + md_table + "```\n")
+    client.chat_postMessage(channel= user_id, text="```\n" + md_table + "```\n")
 
 @app.shortcut("execute_test_suite")
 def open_modal(ack, shortcut, client):
