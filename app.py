@@ -185,7 +185,7 @@ def handle_submission(ack, body, client, view, logger):
     payload = {'name': testsuitename,
                'testcase_prefix': selected_values['testcaseprefix']['plain_text_input-action']['value'],
                'description': selected_values['description']['plain_text_input-action']['value'],
-               'workspace_id': selected_values['workspace']['select-workspace-create-test-suiteß']['selected_option']['value'],
+               'workspace_id': selected_values['workspace']['select-workspace-create-test-suite']['selected_option']['value'],
                'deduplicate_requests': selected_values['deduplicaterequests']['radio_buttons-action']['selected_option']['value'] == 'True',
                'duplicate': True,
                'assertions': assertions,
@@ -617,9 +617,11 @@ def handle_submission(ack, body, client, view,say, respond):
     client.chat_postMessage(channel=channel_id, text="```\n" + md_table + "```\n")
 
 @app.event("app_home_opened")
-def handle_app_home_opened_events(body, logger, say):
-    logger.info(body)
-    say("Hi! I'm Tyke Bot. Please check shortcuts to explore my functions.")
+def handle_app_home_opened_events(body, logger, client):
+    logger.info(body['event']['user'])
+    client.views_publish(
+        user_id=body['event']['user'], view=open('./user-interface/modals/app-home.json'))
+
 
 # @app.event("app_home_opened")
 # def home_content(event, client):
