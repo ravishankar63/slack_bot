@@ -199,7 +199,10 @@ def handle_submission(ack, body, client, view, logger):
             url=API_POST_TEST_SUITE, data=json.dumps(payload), headers=headers)
         print("Response1", testsuite_res.json())
         print(json.dumps(payload))
-        msg = f'Your test suite {testsuitename} created successfully'
+        if testsuite_res.json()['error']:
+            msg = f"Your test suite {testsuitename} creation failed. Error message: {testsuite_res.json()['message']}"
+        else:
+            msg = f'Your test suite {testsuitename} created successfully'
 
     except Exception as e:
         print(e)
@@ -308,8 +311,11 @@ def handle_submission(ack, body, client, view, logger):
         apicollection_res = requests.post(
             url=API_POST_API_COLLECTION, data=json.dumps(payload), headers=headers)
         print("Response", apicollection_res.json())
-        print(json.dumps(payload))
-        msg = f'Your collection {apicollectionname} created successfully'
+        
+        if apicollection_res.json()['error']:
+            msg = f"Your collection {apicollectionname} creation failed. Error message: {apicollection_res.json()['message']}"
+        else:
+            msg = f'Your collection {apicollectionname} created successfully'
 
     except Exception as e:
         print(e)
