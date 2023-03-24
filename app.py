@@ -620,7 +620,7 @@ def handle_submission(ack, body, client, view,say, respond):
 def handle_app_home_opened_events(body, logger, client):
     logger.info(body['event']['user'])
     client.views_publish(
-        user_id=body['event']['user'], view=json.load(open('./user-interface/modals/app-home.json')))
+        user_id=body['event']['user'], view=json.dumps(json.load(open('./user-interface/modals/app-home.json'))))
 
 
 # @app.event("app_home_opened")
