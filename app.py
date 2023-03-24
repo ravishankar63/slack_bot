@@ -322,10 +322,29 @@ def handle_submission(ack, body, client, view, logger):
         logger.exception(f"Failed to post a message {e}")
 
 @app.command("/listtestsuite")
-def open_modal(ack, respond,body, client):
+def open_modal(ack, logger,body, client):
     # Acknowledge command request
     ack()
+    logger.info(body)
+    try:
+        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
+        print(workspace_res.json())
+    except:
+        print("An exception occurred")
+
+    workspace_list = list(
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+
     views = json.load(open('./user-interface/modals/list-test-suite.json'))
+    # print(views['blocks'][0]['elements'][0]['options'])
+
+    views['blocks'][1]['element'][0]['options'] = list(map(lambda x: {
+        'text': {
+            "type": "plain_text",
+            "text": x['name']
+        },
+        'value': x['id']}, workspace_list))
+
     client.views_open(
         trigger_id=body["trigger_id"], view=json.dumps(views))
     #respond(f"{command['text']}")
@@ -575,7 +594,7 @@ def open_modal(ack, respond,shortcut, client):
     views = json.load(open('./user-interface/modals/list-api-collections.json'))
     # print(views['blocks'][0]['elements'][0]['options'])
 
-    views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
+    views['blocks'][0]['element'][0]['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
@@ -621,15 +640,6 @@ def handle_app_home_opened_events(body, logger, client):
     logger.info(body['event']['user'])
     client.views_publish(
         user_id=body['event']['user'], view=json.dumps(json.load(open('./user-interface/modals/app-home.json'))))
-
-
-# @app.event("app_home_opened")
-# def home_content(event, client):
-#     user_id = event["user"]
-#     client.views_publish(
-#         user_id=user_id, view=open('./user-interface/modals/app-home.json'))
-
-
 
 flask_app = Flask(__name__)
 handler = SlackRequestHandler(app)
