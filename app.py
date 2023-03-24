@@ -623,7 +623,7 @@ def handle_submission(ack, body, client, view,say, respond):
         print("An exception occurred")
 
     apicollecdf= pd.json_normalize(apicollec_res.json()['data'])
-    apicollecdf=apicollecdf[['name', 'description','collection.name','total_test_cases','execution_count']]
+    apicollecdf=apicollecdf[['name','start_time','end_time','api_count','created_by.firstname']]
     md_table = apicollecdf.to_markdown()
     print(apicollecdf.head())
     #say(channel=channel_id, text="Done")
