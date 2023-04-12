@@ -23,19 +23,50 @@ from slack_sdk.oauth import AuthorizeUrlGenerator
 from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 
-# Issue and consume state parameter value on the server-side.
-#state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data")
-# Persist installation data and lookup it by IDs.
-#installation_store = FileInstallationStore(base_dir="/data/installations")
-
-# Build https://slack.com/oauth/v2/authorize with sufficient query parameters
-# authorize_url_generator = AuthorizeUrlGenerator(
-#     client_id=os.environ["SLACK_CLIENT_ID"],
-#     scopes=["app_mentions:read", "chat:write"],
-#     user_scopes=["search:read"],
-# )
-
+from slack_sdk.web import WebClient
+client_secret = os.environ["SLACK_CLIENT_SECRET"]
 from flask import Flask, request, make_response
+import psycopg2
+from db_config import *
+
+def ExecuteQuery(query):
+    try:
+        conn = psycopg2.connect(
+        dbname= DB_SOURCE,  # Replace with your database name
+        user= DB_USERNAME,  # Replace with your username
+        password=DB_PASSWORD,  # Replace with your password
+        host=TESTS_STORE,  # Replace with your host
+        port=DB_PORT  # Replace with your port (default is usually 5432)
+        )
+
+        cur = conn.cursor()
+        cur.execute(query)
+        
+        rows = cur.fetchall()
+        
+        if rows is None:
+            return [()]
+        return rows
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("Error:",error)
+    finally:
+        if conn is not None:
+            conn.commit()
+            cur.close()
+            conn.close()
+
+
+# Issue and consume state parameter value on the server-side.
+state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data/states")
+#Persist installation data and lookup it by IDs.
+installation_store = FileInstallationStore(base_dir="./data/installations")
+
+#Build https://slack.com/oauth/v2/authorize with sufficient query parameters
+authorize_url_generator = AuthorizeUrlGenerator(
+    client_id=os.environ["SLACK_CLIENT_ID"],
+    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write","commands", "groups:history", "im:write","reactions:read", "files:write"],
+    user_scopes=["admin","channels:history", "chat:write"],
+)
 
 oauth_settings = OAuthSettings(
     client_id=os.environ["SLACK_CLIENT_ID"],
@@ -44,32 +75,40 @@ oauth_settings = OAuthSettings(
     scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write","commands", "groups:history", "im:write","reactions:read", "files:write"],
     user_scopes=["admin","channels:history", "chat:write"],
     redirect_uri_path="/slack/oauth_redirect",
-    installation_store= FileInstallationStore(base_dir="./data/installations"),
-    state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
-    
+    installation_store= installation_store,
+    state_store= state_store,
 )
-
 
 app = App(
     signing_secret=os.environ["SLACK_SIGNING_SECRET"],
     oauth_settings=oauth_settings,
-       
 )
 
 headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJjMGRiM2EwZS1jOTYwLTQzZWUtOThiNC1jMTBhMGJkOWIzOWQiLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTI0VDA1OjE0OjU4Ljk0NTU3ODY0MVoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yNVQwNToxNDo1OC45NDU1NzkxMjNaIn0.QrLe4ccjb203bNsWiVHEjK5fndKGAKZHddPEchit9kI'}
 
-@app.middleware  # or app.use(log_request)
-def log_request(logger, body, next):
-    # logger.debug(body)
-    return next()
 
+@app.middleware  # or app.use(log_request)
+def log_request(logger, body, context, payload, next):
+    logger.info(body)
+    logger.info(context)
+    logger.info(payload)
+
+    if "user" in body:
+        team_id= body['user']['team_id']
+        user_id= body['user']['id']
+    else:
+        team_id= body['team_id']
+        user_id= body['user_id']
+    install_store = installation_store.find_installation(enterprise_id=None,team_id=team_id, user_id=user_id)
+    headers['Authorization']= f"Bearer {install_store.custom_values['tyke_user_token']}"
+    print("Header", headers)
+    return next()
 
 @app.event("app_mention")
 def event_test(body, say, logger):
     #logger.info(body)
     print("appmention")
     say("Hi! I'm Tyke Bot. Please check shortcuts to explore my functions.")
-
 
 @app.message("Hello")
 def say_hello(message, say):
@@ -646,91 +685,114 @@ def handle_app_home_opened_events(body, logger, client):
 flask_app = Flask(__name__)
 handler = SlackRequestHandler(app)
 
-# @flask_app.route("/slack/install", methods=["GET"])
-# def oauth_start():
-#     print("Yes1")
-#     # Generate a random value and store it on the server-side
-#     state = state_store.issue()
-#     # https://slack.com/oauth/v2/authorize?state=(generated value)&client_id={client_id}&scope=app_mentions:read,chat:write&user_scope=search:read
-#     url = authorize_url_generator.generate(state)
-#     print("Yes2")
-#     return f'<a href="{url}">' \
-#            f'<img alt=""Add to Slack"" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>'
-
 
 from slack_sdk.web import WebClient
 client_secret = os.environ["SLACK_CLIENT_SECRET"]
 
+@flask_app.route("/slack/install", methods=["GET"])
+def oauth_start():
+    # Generate a random value and store it on the server-side
+    state = state_store.issue()
+    # https://slack.com/oauth/v2/authorize?state=(generated value)&client_id={client_id}&scope=app_mentions:read,chat:write&user_scope=search:read
+    url = authorize_url_generator.generate(state)
+    return f'<a href="{url}">' \
+           f'<img alt=""Add to Slack"" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>'
 
-# @flask_app.route("/slack/oauth/callback", methods=["GET"])
-# def oauth_callback():
-#     args = request.args
-#     print("Yes1")
-   
-#     if "code" in request.args:
-       
-#         if state_store.consume(request.args["state"]):
-#             client = WebClient() 
+# Redirect URL
+@flask_app.route("/slack/oauth_redirect", methods=["GET"])
+def oauth_callback():
+    # Retrieve the auth code and state from the request params
+    if "code" in request.args:
+        # Verify the state parameter
+        if state_store.consume(request.args["state"]):
+            state= request.args["state"]
+            client = WebClient()  # no prepared token needed for this
             
-#             oauth_response = client.oauth_v2_access(
-#                 client_id="3758031487061.4566211234965",
-#                 client_secret=client_secret,
-#                 redirect_uri="https://54.147.129.186/slack/oauth/callback",
-#                 code=request.args["code"]
-#             )
+            # Complete the installation by calling oauth.v2.access API method
+            oauth_response = client.oauth_v2_access(
+                client_id= os.environ["SLACK_CLIENT_ID"],
+                client_secret=client_secret,
+                redirect_uri="https://d7a4-2401-4900-1cc9-1e5d-adcb-48a8-4595-2767.ngrok-free.app/slack/oauth_redirect",
+                code=request.args["code"]
+            )
 
-#             installed_enterprise = oauth_response.get("enterprise", {})
-#             is_enterprise_install = oauth_response.get("is_enterprise_install")
-#             installed_team = oauth_response.get("team", {})
-#             installer = oauth_response.get("authed_user", {})
-#             incoming_webhook = oauth_response.get("incoming_webhook", {})
+            installed_enterprise = oauth_response.get("enterprise", {})
+            is_enterprise_install = oauth_response.get("is_enterprise_install")
+            installed_team = oauth_response.get("team", {})
+            installer = oauth_response.get("authed_user", {})
+            incoming_webhook = oauth_response.get("incoming_webhook", {})
 
-#             bot_token = oauth_response.get("access_token")
-           
-#             bot_id = None
-#             enterprise_url = None
-#             if bot_token is not None:
-#                 auth_test = client.auth_test(token=bot_token)
-#                 bot_id = auth_test["bot_id"]
-#                 if is_enterprise_install is True:
-#                     enterprise_url = auth_test.get("url")
+            bot_token = oauth_response.get("access_token")
+            
+            if installed_enterprise is None:
+                installed_enterprise={'id':None, 'name':None}
+            # NOTE: oauth.v2.access doesn't include bot_id in response
+            bot_id = None
+            enterprise_url = None
+            if bot_token is not None:
+                auth_test = client.auth_test(token=bot_token)
+                bot_id = auth_test["bot_id"]
+                if is_enterprise_install is True:
+                    enterprise_url = auth_test.get("url")
 
-#             installation = Installation(
-#                 app_id=oauth_response.get("app_id"),
-#                 enterprise_id=installed_enterprise.get("id"),
-#                 enterprise_name=installed_enterprise.get("name"),
-#                 enterprise_url=enterprise_url,
-#                 team_id=installed_team.get("id"),
-#                 team_name=installed_team.get("name"),
-#                 bot_token=bot_token,
-#                 bot_id=bot_id,
-#                 bot_user_id=oauth_response.get("bot_user_id"),
-#                 bot_scopes=oauth_response.get("scope"), 
-#                 user_id=installer.get("id"),
-#                 user_token=installer.get("access_token"),
-#                 user_scopes=installer.get("scope"),  
-#                 incoming_webhook_url=incoming_webhook.get("url"),
-#                 incoming_webhook_channel=incoming_webhook.get("channel"),
-#                 incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
-#                 incoming_webhook_configuration_url=incoming_webhook.get("configuration_url"),
-#                 is_enterprise_install=is_enterprise_install,
-#                 token_type=oauth_response.get("token_type"),
-#             )
+            state='asdfghjkl'
+            get_row = ExecuteQuery(f"SELECT tyke_user_token FROM slack_info WHERE state='{state}'")
+            print("DB Response:", get_row)
+         
+            update_query= "UPDATE slack_info SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE state='{}'".format(
+                oauth_response.get("app_id"),
+                installed_enterprise.get("id"),
+                enterprise_url,
+                installed_team.get("id"),
+                installed_team.get("name"),
+                bot_token,
+                bot_id,
+                oauth_response.get("bot_user_id"),
+                installer.get("id"),
+                installer.get("access_token"),
+                '2023',
+                'asdfghjkl'
+            )
+            update_row= ExecuteQuery(update_query)
 
-#             # Store the installation
-#             installation_store.save(installation)
+            installation = Installation(
+                app_id=oauth_response.get("app_id"),
+                enterprise_id=installed_enterprise.get("id"),
+                enterprise_name=installed_enterprise.get("name"),
+                enterprise_url=enterprise_url,
+                team_id=installed_team.get("id"),
+                team_name=installed_team.get("name"),
+                bot_token=bot_token,
+                bot_id=bot_id,
+                bot_user_id=oauth_response.get("bot_user_id"),
+                bot_scopes=oauth_response.get("scope"),  # comma-separated string
+                user_id=installer.get("id"),
+                user_token=installer.get("access_token"),
+                user_scopes=installer.get("scope"),  # comma-separated string
+                incoming_webhook_url=incoming_webhook.get("url"),
+                incoming_webhook_channel=incoming_webhook.get("channel"),
+                incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
+                incoming_webhook_configuration_url=incoming_webhook.get("configuration_url"),
+                is_enterprise_install=is_enterprise_install,
+                token_type=oauth_response.get("token_type"),
+                custom_values={
+                'tyke_user_token': get_row[0][0]
+                }
+            )
+            print(installation)
+            # Store the installation
+            installation_store.save(installation)
 
-#             return "Thanks for installing this app!"
-#         else:
-#             return make_response(f"Try the installation again (the state value is already expired)", 400)
+            return "Thanks for installing this app!"
+        else:
+            return make_response(f"Try the installation again (the state value is already expired)", 400)
 
-#     error = request.args["error"] if "error" in request.args else ""
-#     return make_response(f"Something is wrong with the installation (error: {error})", 400)
-
-
+    error = request.args["error"] if "error" in request.args else ""
+    return make_response(f"Something is wrong with the installation (error: {error})", 400)
 
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
+
     return handler.handle(request)
 
 @flask_app.route("/listtestsuite", methods=["POST"])
@@ -751,7 +813,7 @@ def slack_install():
 
 
 if __name__ == '__main__':
-    #flask_app.run(host='0.0.0.0', port=5000)
-    flask_app.run(host='0.0.0.0', port=5000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
+    flask_app.run(host='0.0.0.0', port=6000)
+    #flask_app.run(host='0.0.0.0', port=6000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
 
 # Start your app
