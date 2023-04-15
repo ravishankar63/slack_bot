@@ -1,3 +1,10 @@
+from api_request import api_request
+from config import *
+import psycopg2
+from flask import Flask, request, make_response
+from slack_sdk.web import WebClient
+from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
+from slack_sdk.oauth import AuthorizeUrlGenerator
 from flask import Flask, request
 import logging
 from slack_bolt import App
@@ -7,48 +14,45 @@ import os
 from dotenv import load_dotenv
 import json
 import requests
-from config import *
+from api_config import *
 from datetime import datetime, timedelta
 import pandas as pd
 from pandas import json_normalize
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 from slack_sdk.oauth.installation_store import FileInstallationStore
 from slack_sdk.oauth.state_store import FileOAuthStateStore
-
+import time
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
-import os
-from slack_sdk.oauth import AuthorizeUrlGenerator
-from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
-from slack_sdk.oauth.state_store import FileOAuthStateStore
 
-from slack_sdk.web import WebClient
-client_secret = os.environ["SLACK_CLIENT_SECRET"]
-from flask import Flask, request, make_response
-import psycopg2
-from db_config import *
+slack_client_secret = os.environ["SLACK_CLIENT_SECRET"]
+slack_client_id = os.environ["SLACK_CLIENT_ID"]
+slack_signing_secret = os.environ["SLACK_SIGNING_SECRET"]
+tyke_api_url = os.environ['TYKE_API']
+tyke_slack_url = os.environ['TYKE_SLACK']
+
 
 def ExecuteQuery(query):
     try:
         conn = psycopg2.connect(
-        dbname= DB_SOURCE,  # Replace with your database name
-        user= DB_USERNAME,  # Replace with your username
-        password=DB_PASSWORD,  # Replace with your password
-        host=TESTS_STORE,  # Replace with your host
-        port=DB_PORT  # Replace with your port (default is usually 5432)
+            dbname=DB_SOURCE,  # Replace with your database name
+            user=DB_USERNAME,  # Replace with your username
+            password=DB_PASSWORD,  # Replace with your password
+            host=TESTS_STORE,  # Replace with your host
+            port=DB_PORT  # Replace with your port (default is usually 5432)
         )
 
         cur = conn.cursor()
         cur.execute(query)
-        
+
         rows = cur.fetchall()
-        
+
         if rows is None:
             return [()]
         return rows
     except (Exception, psycopg2.DatabaseError) as error:
-        print("Error:",error)
+        print("Error:", error)
     finally:
         if conn is not None:
             conn.commit()
@@ -57,34 +61,51 @@ def ExecuteQuery(query):
 
 
 # Issue and consume state parameter value on the server-side.
-state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data/states")
-#Persist installation data and lookup it by IDs.
+state_store = FileOAuthStateStore(
+    expiration_seconds=300, base_dir="./data/states")
+# Persist installation data and lookup it by IDs.
 installation_store = FileInstallationStore(base_dir="./data/installations")
 
-#Build https://slack.com/oauth/v2/authorize with sufficient query parameters
+# Build https://slack.com/oauth/v2/authorize with sufficient query parameters
 authorize_url_generator = AuthorizeUrlGenerator(
-    client_id=os.environ["SLACK_CLIENT_ID"],
-    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write","commands", "groups:history", "im:write","reactions:read", "files:write"],
-    user_scopes=["admin","channels:history", "chat:write"],
+    client_id=slack_client_id,
+    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write",
+            "commands", "groups:history", "im:write", "reactions:read", "files:write"],
+    user_scopes=["admin", "channels:history", "chat:write"],
 )
 
 oauth_settings = OAuthSettings(
-    client_id=os.environ["SLACK_CLIENT_ID"],
-    client_secret=os.environ["SLACK_CLIENT_SECRET"],
+    client_id=slack_client_id,
+    client_secret=slack_client_secret ,
     install_path="/slack/install",
-    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write","commands", "groups:history", "im:write","reactions:read", "files:write"],
-    user_scopes=["admin","channels:history", "chat:write"],
+    scopes=["app_mentions:read", "channels:history", "channels:manage", "chat:write",
+            "commands", "groups:history", "im:write", "reactions:read", "files:write"],
+    user_scopes=["admin", "channels:history", "chat:write"],
     redirect_uri_path="/slack/oauth_redirect",
-    installation_store= installation_store,
-    state_store= state_store,
+    installation_store=installation_store,
+    state_store=state_store,
 )
 
 app = App(
-    signing_secret=os.environ["SLACK_SIGNING_SECRET"],
+    signing_secret=slack_signing_secret,
     oauth_settings=oauth_settings,
 )
 
 headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJjMGRiM2EwZS1jOTYwLTQzZWUtOThiNC1jMTBhMGJkOWIzOWQiLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTI0VDA1OjE0OjU4Ljk0NTU3ODY0MVoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yNVQwNToxNDo1OC45NDU1NzkxMjNaIn0.QrLe4ccjb203bNsWiVHEjK5fndKGAKZHddPEchit9kI'}
+
+
+@app.middleware  # or app.use(log_request)
+def log_request(client, body, next, logger):
+    logger.debug(body)
+    try:
+        health = api_request(method='GET', url=API_HEALTH, headers=headers)
+    except requests.exceptions.HTTPError as e:
+        print(e.response.status_code)
+        if e.response.status_code == 401:
+            views = json.load(open('./user-interface/modals/login.json'))
+            client.views_open(
+                trigger_id=body["trigger_id"], view=json.dumps(views))
+    return next()
 
 
 @app.middleware  # or app.use(log_request)
@@ -94,47 +115,47 @@ def log_request(logger, body, context, payload, next):
     logger.info(payload)
 
     if "user" in body:
-        team_id= body['user']['team_id']
-        user_id= body['user']['id']
+        team_id = body['user']['team_id']
+        user_id = body['user']['id']
     else:
-        team_id= body['team_id']
-        user_id= body['user_id']
-    install_store = installation_store.find_installation(enterprise_id=None,team_id=team_id, user_id=user_id)
-    headers['Authorization']= f"Bearer {install_store.custom_values['tyke_user_token']}"
+        team_id = body['team_id']
+        user_id = body['user_id']
+    install_store = installation_store.find_installation(
+        enterprise_id=None, team_id=team_id, user_id=user_id)
+    headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
     print("Header", headers)
     return next()
 
+
 @app.event("app_mention")
 def event_test(body, say, logger):
-    #logger.info(body)
+    # logger.info(body)
     print("appmention")
     say("Hi! I'm Tyke Bot. Please check shortcuts to explore my functions.")
+
 
 @app.message("Hello")
 def say_hello(message, say):
     user = message['user']
     say(f"Hi there, <@{user}>!")
 
+
 @app.shortcut("test_suite_create")
-def open_modal(ack, shortcut, client):
+def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
-
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        tags_res = requests.get(url=API_GET_TAGS, headers=headers)
-        print(workspace_res.json())
-        print(tags_res.json())
-    except:
-        print("An exception occurred")
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+        tags_res = api_request(method='GET', url=API_GET_TAGS, headers=headers)
+    except Exception as e:
+        logger.error(e)
 
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
-    tags_list = list(map(lambda x: {'name': x['name'], 'id': x['id']}, json.loads(
-        tags_res.text)['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
+    tags_list = list(map(lambda x: {'name': x['name'], 'id': x['id']}, tags_res['data']))
 
     views = json.load(open('./user-interface/modals/test-suite-creation.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -148,49 +169,42 @@ def open_modal(ack, shortcut, client):
             "text": x['name']
         },
         'value': x['id']}, tags_list))
-    # print(views)
-    # print(tags_list)
-    # print(views)
+
     client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
     with open('./user-interface/modals/test-suite-creation.json', "w") as outfile:
         json.dump(views, outfile)
 
+
 @app.action("select-workspace-create-test-suite")
-def update_modal(ack, body, client):
-    # Acknowledge the button request
+def update_modal(ack, body, client, logger):
+
     ack()
-    # Call views_update with the built-in client
-    print("Here", body["view"])
 
     workspace_id = body['actions'][0]['selected_option']['value']
 
-    # print(API_COLLECTIONS + f"workspace_id={workspace_id}")
     try:
-        collection_res = requests.get(
-            url=API_GET_API_COLLECTIONS + f"{workspace_id}", headers=headers)
-        print("Success get collections")
-    except:
-        print("An exception occurred")
+        collection_res = api_request(method='GET',
+                                     url=API_GET_API_COLLECTIONS + f"{workspace_id}", headers=headers)
+    except Exception as e:
+        logger.error(e)
 
-    # print(json.loads(collection_res.text)['data'])
     collection_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, collection_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, collection_res['data']))
 
     views = json.load(open('./user-interface/modals/test-suite-creation.json'))
 
-    # print(views['blocks'][1]['elements'][0]['options'])
     views['blocks'][1]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
         },
         'value': x['id']}, collection_list))
-    print(views['blocks'][1]['element']['options'])
-    response = client.views_update(    # Pass the view_id
+
+    client.views_update(    
         view_id=body["view"]["id"],
-        # String that represents view state to protect against race conditions
         hash=body["view"]["hash"], view=json.dumps(views))
+
 
 @app.view("test-suite-create")
 def handle_submission(ack, body, client, view, logger):
@@ -198,7 +212,7 @@ def handle_submission(ack, body, client, view, logger):
     selected_values = view["state"]["values"]
     user = body["user"]["id"]
     print(selected_values)
-    # Validate the inputs
+
     errors = {}
     if selected_values['testsuitename']['plain_text_input-action']['value'] is not None and len(selected_values['testsuitename']['plain_text_input-action']['value']) <= 5:
         errors["testsuitename"] = "The value must be longer than 5 characters"
@@ -208,19 +222,19 @@ def handle_submission(ack, body, client, view, logger):
 
     ack()
 
-    
     selected_tags = []
     for i in range(0, len(selected_values['tags']['multi_static_select-action']['selected_options'])):
         selected_tags.append(
             selected_values['tags']['multi_static_select-action']['selected_options'][i]['value'])
-    assertions=[{"category": "response_content", "field": "data", "condition": "match_expected",
-                'options': {"ignore_identifiers": False, "ignore_timestamps": False, "schema_only": False}}]
-    assertions[0]["options"][selected_values['includestatuscode']['radio_buttons-action']['selected_option']['text']['text'].replace(" ", "_").lower()]=True
-    if(selected_values['includestatuscode']['radio_buttons-action']['selected_option']['value'] == 'True'):
+    assertions = [{"category": "response_content", "field": "data", "condition": "match_expected",
+                  'options': {"ignore_identifiers": False, "ignore_timestamps": False, "schema_only": False}}]
+    assertions[0]["options"][selected_values['includestatuscode']['radio_buttons-action']
+                             ['selected_option']['text']['text'].replace(" ", "_").lower()] = True
+    if (selected_values['includestatuscode']['radio_buttons-action']['selected_option']['value'] == 'True'):
         assertions.append({"category": "response_status", "field": "code",
-                "condition": "match_expected"})
-    
-    testsuitename = selected_values['testsuitename']['plain_text_input-action']['value']  
+                           "condition": "match_expected"})
+
+    testsuitename = selected_values['testsuitename']['plain_text_input-action']['value']
     payload = {'name': testsuitename,
                'testcase_prefix': selected_values['testcaseprefix']['plain_text_input-action']['value'],
                'description': selected_values['description']['plain_text_input-action']['value'],
@@ -228,47 +242,45 @@ def handle_submission(ack, body, client, view, logger):
                'deduplicate_requests': selected_values['deduplicaterequests']['radio_buttons-action']['selected_option']['value'] == 'True',
                'duplicate': True,
                'assertions': assertions,
-                'collection_id': selected_values['apicollection']['static_select-action']['selected_option']['value'],
-                'tags': selected_tags}
+               'collection_id': selected_values['apicollection']['static_select-action']['selected_option']['value'],
+               'tags': selected_tags}
 
     # Message to send user
     msg = ""
     try:
-        testsuite_res = requests.post(
+        testsuite_res = api_request(method='POST', 
             url=API_POST_TEST_SUITE, data=json.dumps(payload), headers=headers)
-        print("Response1", testsuite_res.json())
-        print(json.dumps(payload))
-        if testsuite_res.json()['error']:
-            msg = f"Your test suite {testsuitename} creation failed. Error message: {testsuite_res.json()['message']}"
+
+        if testsuite_res['error']:
+            msg = f"Your test suite {testsuitename} creation failed. Error message: {testsuite_res['message']}"
         else:
             msg = f'Your test suite {testsuitename} created successfully'
 
     except Exception as e:
-        print(e)
-        msg = f"Your test suite {testsuitename} creation failed, due to {e}"
+        logger.error(e)
 
-    # Message the user
     try:
         client.chat_postMessage(channel=user, text=msg)
     except e:
         logger.exception(f"Failed to post a message {e}")
 
+
 @app.shortcut("api_collection_create")
-def open_modal(ack, shortcut, client):
+def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
 
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        print(workspace_res.json())
-    except:
-        print("An exception occurred")
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+    except Exception as e:
+        logger.error(e)
 
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(open('./user-interface/modals/api-collection-creation.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
+    views = json.load(
+        open('./user-interface/modals/api-collection-creation.json'))
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -276,112 +288,104 @@ def open_modal(ack, shortcut, client):
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
-   
+
     client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-    
+
     with open('./user-interface/modals/api-collection-creation.json', "w") as outfile:
         json.dump(views, outfile)
 
+
 @app.action("select-workspace-create-api-collection")
-def update_modal(ack, body, client):
+def update_modal(ack, body, client, logger):
     # Acknowledge the button request
     ack()
-    # Call views_update with the built-in client
-    print("Here", body["view"])
 
     workspace_id = body['actions'][0]['selected_option']['value']
 
-    # print(API_COLLECTIONS + f"workspace_id={workspace_id}")
     try:
-        services_res = requests.get(
-            url=API_GET_SERVICES + f"{workspace_id}", headers=headers)
-        print("Success get services")
-    except:
-        print("An exception occurred")
+        services_res = api_request(method='GET',
+                                   url=API_GET_SERVICES + f"{workspace_id}", headers=headers)
+    except Exception as e:
+        logger.error(e)
 
-    # print(json.loads(collection_res.text)['data'])
     services_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, services_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, services_res['data']))
 
-    views = json.load(open('./user-interface/modals/api-collection-creation.json'))
+    views = json.load(
+        open('./user-interface/modals/api-collection-creation.json'))
 
-    # print(views['blocks'][1]['elements'][0]['options'])
     views['blocks'][3]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
         },
         'value': x['id']}, services_list))
-    
-    client.views_update(    # Pass the view_id
+
+    client.views_update(    
         view_id=body["view"]["id"],
-        # String that represents view state to protect against race conditions
         hash=body["view"]["hash"], view=json.dumps(views))
+
 
 @app.view("api-collection-create")
 def handle_submission(ack, body, client, view, logger):
 
+    ack()
     selected_values = view["state"]["values"]
     user = body["user"]["id"]
-    print(selected_values)
-    # Validate the inputs
     errors = {}
+
     if selected_values['apicollectionname']['plain_text_input-action']['value'] is not None and len(selected_values['apicollectionname']['plain_text_input-action']['value']) <= 5:
         errors['apicollectionname'] = "The value must be longer than 5 characters"
     if len(errors) > 0:
         ack(response_action="errors", errors=errors)
         return
 
-    ack()
-    apicollectionname= selected_values['apicollectionname']['plain_text_input-action']['value'];
-    payload = {
-    'name': apicollectionname, 
-    'start_time': str(datetime.now() - timedelta(hours = float(selected_values['collectionperiod']['static_select-action']['selected_option']['value']))),
-    'end_time': datetime.now().isoformat(),
-    'service_id': selected_values['service']['static_select-action']['selected_option']['value'],
-    'description': selected_values['description']['plain_text_input-action']['value'],
-    'duplicate': True
-    }
     
-    # Message to send user
+    apicollectionname = selected_values['apicollectionname']['plain_text_input-action']['value']
+    payload = {
+        'name': apicollectionname,
+        'start_time': str(datetime.now() - timedelta(hours=float(selected_values['collectionperiod']['static_select-action']['selected_option']['value']))),
+        'end_time': datetime.now().isoformat(),
+        'service_id': selected_values['service']['static_select-action']['selected_option']['value'],
+        'description': selected_values['description']['plain_text_input-action']['value'],
+        'duplicate': True
+    }
+
     msg = ""
     try:
-        apicollection_res = requests.post(
+        apicollection_res = api_request(method='POST', 
             url=API_POST_API_COLLECTION, data=json.dumps(payload), headers=headers)
-        print("Response", apicollection_res.json())
-        
-        if apicollection_res.json()['error']:
-            msg = f"Your collection {apicollectionname} creation failed. Error message: {apicollection_res.json()['message']}"
+
+        if apicollection_res['error']:
+            msg = f"Your collection {apicollectionname} creation failed. Error message: {apicollection_res['message']}"
         else:
             msg = f'Your collection {apicollectionname} created successfully'
 
     except Exception as e:
-        print(e)
-        msg = f"Your collection {apicollectionname} creation failed, due to {e}"
+        logger.error(e)
 
-    # Message the user
     try:
         client.chat_postMessage(channel=user, text=msg)
     except e:
         logger.exception(f"Failed to post a message {e}")
 
+
 @app.command("/listtestsuite")
-def open_modal(ack, logger,body, client):
+def open_modal(ack, logger, body, client):
     # Acknowledge command request
     ack()
     logger.info(body)
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        print(workspace_res.json())
-    except:
-        print("An exception occurred")
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+    except Exception as e:
+        logger.error(e)
 
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
     views = json.load(open('./user-interface/modals/list-test-suite.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
 
     views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
@@ -392,50 +396,49 @@ def open_modal(ack, logger,body, client):
 
     client.views_open(
         trigger_id=body["trigger_id"], view=json.dumps(views))
-    #respond(f"{command['text']}")
+
 
 @app.view("list-test-suite")
-def handle_submission(ack, body, client, view,say, respond):
+def handle_submission(ack, body, client, view, logger):
 
     selected_values = view["state"]["values"]
     user_id = body["user"]["id"]
-    #print(selected_values)
-    # Validate the inputs
-    ack()
-    workspace_id= selected_values['selectworkspace']['static_select-action']['selected_option']['value']
-    page_no= selected_values['selectpage']['static_select-action']['selected_option']['value']
-    #print(channel_id)
-    try:
-        testsuite_res = requests.get(url=API_GET_TEST_SUITE_BY_PAGE+ f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
-        #print(testsuite_res.json()['data'])
-    except:
-        print("An exception occurred")
 
-    testsuitedf= pd.json_normalize(testsuite_res.json()['data'])
-    testsuitedf=testsuitedf[['name', 'description','collection.name','total_test_cases','execution_count']]
+    ack()
+    workspace_id = selected_values['selectworkspace']['static_select-action']['selected_option']['value']
+    page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
+
+    try:
+        testsuite_res = api_request(method='GET', url=API_GET_TEST_SUITE_BY_PAGE +
+                                    f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
+    except Exception as e:
+        logger.error(e)
+
+    testsuitedf = pd.json_normalize(testsuite_res['data'])
+    testsuitedf = testsuitedf[[
+        'name', 'description', 'collection.name', 'total_test_cases', 'execution_count']]
     md_table = testsuitedf.to_markdown()
-    
-    #say(channel=channel_id, text="Done")
-    blocks = json.load(open('./user-interface/modals/list-test-suite-blocks.json'))
-    blocks['blocks'][0]['text']['text']= "```\n" + md_table + "```\n"
-    client.chat_postMessage(channel= user_id, text="```\n" + md_table + "```\n")
+
+    blocks = json.load(
+        open('./user-interface/modals/list-test-suite-blocks.json'))
+    blocks['blocks'][0]['text']['text'] = "```\n" + md_table + "```\n"
+    client.chat_postMessage(channel=user_id, text="```\n" + md_table + "```\n")
+
 
 @app.shortcut("execute_test_suite")
-def open_modal(ack, shortcut, client):
+def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
 
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        print(workspace_res.json())
-    except:
-        print("An exception occurred")
-
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+    except Exception as e:
+        logger.error(e)
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
     views = json.load(open('./user-interface/modals/execute-test-suite.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -443,102 +446,91 @@ def open_modal(ack, shortcut, client):
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
-   
+
     client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-    
+
     with open('./user-interface/modals/execute-test-suite.json', "w") as outfile:
         json.dump(views, outfile)
 
+
 @app.action("select-workspace-execute-test-suite")
-def update_modal(ack, body, client):
+def update_modal(ack, body, client, logger):
    # Acknowledge the button request
     ack()
-    # Call views_update with the built-in client
-    print("Here", body["view"])
 
     workspace_id = body['actions'][0]['selected_option']['value']
 
-    # print(API_COLLECTIONS + f"workspace_id={workspace_id}")
     try:
-        testsuite_res = requests.get(
-            url=API_GET_TEST_SUITE_BY_PAGE_100_PER_ROW + f"{workspace_id}", headers=headers)
-        print("Success get services")
-    except:
-        print("An exception occurred")
+        testsuite_res = api_request(method='GET',
+                                    url=API_GET_TEST_SUITE_BY_PAGE_100_PER_ROW + f"{workspace_id}", headers=headers)
+    except Exception as e:
+        logger.error(e)
 
-    # print(json.loads(collection_res.text)['data'])
     testsuite_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, testsuite_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, testsuite_res['data']))
 
     views = json.load(open('./user-interface/modals/execute-test-suite.json'))
 
-    # print(views['blocks'][1]['elements'][0]['options'])
     views['blocks'][1]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
         },
         'value': x['id']}, testsuite_list))
-    
-    client.views_update(    # Pass the view_id
+
+    client.views_update(  
         view_id=body["view"]["id"],
         # String that represents view state to protect against race conditions
-        hash=body["view"]["hash"], view=json.dumps(views)) 
+        hash=body["view"]["hash"], view=json.dumps(views))
     with open('./user-interface/modals/execute-test-suite.json', "w") as outfile:
         json.dump(views, outfile)
-    client.files_upload
+
 
 @app.view("execute-test-suite")
 def handle_submission(ack, body, client, view, logger):
 
     selected_values = view["state"]["values"]
     user = body["user"]["id"]
-    print(selected_values)
 
     ack()
-    testsuite_name=selected_values['selecttestsuite']['static_select-action']['selected_option']['value']
+    testsuite_name = selected_values['selecttestsuite']['static_select-action']['selected_option']['value']
     payload = {
-    'exec_type': 'custom',
-    'testsuite_id': testsuite_name
+        'exec_type': 'custom',
+        'testsuite_id': testsuite_name
     }
-    
-    # Message to send user
+
     msg = ""
     try:
-        execute_res = requests.post(
+        execute_res = api_request(method='POST', 
             url=API_TEST_SUITE_EXECUTE, data=json.dumps(payload), headers=headers)
-        print("Response", execute_res.json())
-        print(json.dumps(payload))
-        message =execute_res.json()['message']
+        message = execute_res['message']
         msg = f'{message}'
 
     except Exception as e:
-        print(e)
-        msg = f"Your testsuite {testsuite_name} execution failed, due to {e}"
+        logger.error(e)
 
-    # Message the user
     try:
         client.chat_postMessage(channel=user, text=msg)
     except e:
         logger.exception(f"Failed to post a message {e}")
 
+
 @app.shortcut("export_test_cases")
-def open_modal(ack, shortcut, client):
+def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
 
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        print(workspace_res.json())
-    except:
-        print("An exception occurred")
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+    except Exception as e:
+        logger.error(e)
 
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
     views = json.load(open('./user-interface/modals/export-test-cases.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -546,50 +538,46 @@ def open_modal(ack, shortcut, client):
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
-   
+
     client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-    
+
     with open('./user-interface/modals/export-test-cases.json', "w") as outfile:
         json.dump(views, outfile)
 
+
 @app.action("select-workspace-export-test-cases")
-def update_modal(ack, body, client):
+def update_modal(ack, body, client, logger):
    # Acknowledge the button request
     ack()
-    # Call views_update with the built-in client
-    print("Here", body["view"])
 
     workspace_id = body['actions'][0]['selected_option']['value']
 
-    # print(API_COLLECTIONS + f"workspace_id={workspace_id}")
     try:
-        testsuite_res = requests.get(
-            url=API_GET_TEST_SUITE_BY_PAGE_100_PER_ROW + f"{workspace_id}", headers=headers)
-        print("Success get services")
-    except:
-        print("An exception occurred")
+        testsuite_res = api_request(method='GET',
+                                    url=API_GET_TEST_SUITE_BY_PAGE_100_PER_ROW + f"{workspace_id}", headers=headers)
+    except Exception as e:
+        logger.error(e)
 
-    # print(json.loads(collection_res.text)['data'])
     testsuite_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, testsuite_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, testsuite_res['data']))
 
     views = json.load(open('./user-interface/modals/export-test-cases.json'))
 
-    # print(views['blocks'][1]['elements'][0]['options'])
     views['blocks'][1]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
         },
         'value': x['id']}, testsuite_list))
-    
-    client.views_update(    # Pass the view_id
+
+    client.views_update(    
         view_id=body["view"]["id"],
-        # String that represents view state to protect against race conditions
-        hash=body["view"]["hash"], view=json.dumps(views)) 
+        hash=body["view"]["hash"], view=json.dumps(views))
+
     with open('./user-interface/modals/export-test-cases.json', "w") as outfile:
         json.dump(views, outfile)
+
 
 @app.view("export-test-cases")
 def handle_submission(ack, body, client, view, logger):
@@ -598,44 +586,40 @@ def handle_submission(ack, body, client, view, logger):
     print(selected_values)
 
     ack()
-    testsuite_id=selected_values['selecttestsuite']['static_select-action']['selected_option']['value']
-    print("Test Suite:", testsuite_id)
-    # Message to send user
-    msg = ""
-    try:
-        testcases_res = requests.get(
-            url=API_GET_TEST_CASES+f"{testsuite_id}", headers=headers)
-        #print("Response", testcases_res.json())
+    testsuite_id = selected_values['selecttestsuite']['static_select-action']['selected_option']['value']
 
-        testcases_data = pd.json_normalize(testcases_res.json(), record_path =['data'])
-        #testcases_data.info()
+    try:
+        testcases_res = api_request(method='GET',
+                                    url=API_GET_TEST_CASES+f"{testsuite_id}", headers=headers)
+
+        testcases_data = pd.json_normalize(
+            testcases_res, record_path=['data'])
     except Exception as e:
-        print(e)
-        msg = f"Your testcases was not possible to fetch due to {e}"
-    
+        logger.error(e)
+
     client.files_upload(
         channels=user,
         initial_comment="Here's your test cases file :smile:",
         filetype="csv",
         filename="testcase.csv",
-        content= testcases_data.to_string(index = False)
+        content=testcases_data.to_string(index=False)
     )
 
+
 @app.shortcut("list_api_collections")
-def open_modal(ack, respond,shortcut, client):
+def open_modal(ack, shortcut, client, logger):
 
-    ack();
+    ack()
     try:
-        workspace_res = requests.get(url=API_GET_WORKSPACES, headers=headers)
-        print(workspace_res.json())
-    except:
-        print("An exception occurred")
-
+        workspace_res = api_request(
+            method='GET', url=API_GET_WORKSPACES, headers=headers)
+    except Exception as e:
+        logger.error(e)
     workspace_list = list(
-        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res.json()['data']))
+        map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(open('./user-interface/modals/list-api-collections.json'))
-    # print(views['blocks'][0]['elements'][0]['options'])
+    views = json.load(
+        open('./user-interface/modals/list-api-collections.json'))
 
     views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
@@ -643,76 +627,77 @@ def open_modal(ack, respond,shortcut, client):
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
-   
+
     client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-    
+
     with open('./user-interface/modals/list-api-collections.json', "w") as outfile:
         json.dump(views, outfile)
 
-@app.view("list-api-collections")
-def handle_submission(ack, body, client, view,say, respond):
 
+@app.view("list-api-collections")
+def handle_submission(ack, body, client, view, logger):
+
+    ack()
     selected_values = view["state"]["values"]
     user_id = body["user"]["id"]
-    #print(selected_values)
-    # Validate the inputs
-    ack()
-    workspace_id= selected_values['selectworkspace']['static_select-action']['selected_option']['value']
-    page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
-    #print(channel_id)
-    try:
-        apicollec_res = requests.get(url=API_GET_API_COLLECTIONS+ f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
-        #print(apicollec_res.json()['data'])
-    except:
-        print("An exception occurred")
 
-    apicollecdf= pd.json_normalize(apicollec_res.json()['data'])
-    apicollecdf=apicollecdf[['name','start_time','end_time','api_count','created_by.firstname']]
+    workspace_id = selected_values['selectworkspace']['static_select-action']['selected_option']['value']
+    page_no = selected_values['selectpage']['static_select-action']['selected_option']['value']
+
+    try:
+        apicollec_res = api_request(method='GET', url=API_GET_API_COLLECTIONS +
+                                    f"{workspace_id}" + f"&page={page_no}&page_size=20&", headers=headers)
+    except Exception as e:
+        logger.error(e)
+    apicollecdf = pd.json_normalize(apicollec_res['data'])
+    apicollecdf = apicollecdf[['name', 'start_time',
+                               'end_time', 'api_count', 'created_by.firstname']]
     md_table = apicollecdf.to_markdown()
-    print(apicollecdf.head())
-    #say(channel=channel_id, text="Done")
-    blocks = json.load(open('./user-interface/modals/list-test-suite-blocks.json'))
-    blocks['blocks'][0]['text']['text']= "```\n" + md_table + "```\n"
+
+    blocks = json.load(
+        open('./user-interface/modals/list-test-suite-blocks.json'))
+    blocks['blocks'][0]['text']['text'] = "```\n" + md_table + "```\n"
+
     client.chat_postMessage(channel=user_id, text="```\n" + md_table + "```\n")
+
 
 @app.event("app_home_opened")
 def handle_app_home_opened_events(body, logger, client):
-    logger.info(body['event']['user'])
+
     client.views_publish(
         user_id=body['event']['user'], view=json.dumps(json.load(open('./user-interface/modals/app-home.json'))))
+
 
 flask_app = Flask(__name__)
 handler = SlackRequestHandler(app)
 
 
-from slack_sdk.web import WebClient
-client_secret = os.environ["SLACK_CLIENT_SECRET"]
+
 
 @flask_app.route("/slack/install", methods=["GET"])
 def oauth_start():
-    # Generate a random value and store it on the server-side
     state = state_store.issue()
-    # https://slack.com/oauth/v2/authorize?state=(generated value)&client_id={client_id}&scope=app_mentions:read,chat:write&user_scope=search:read
+
     url = authorize_url_generator.generate(state)
     return f'<a href="{url}">' \
            f'<img alt=""Add to Slack"" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>'
 
-# Redirect URL
+
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_callback():
     # Retrieve the auth code and state from the request params
     if "code" in request.args:
         # Verify the state parameter
         if state_store.consume(request.args["state"]):
-            state= request.args["state"]
+            state = request.args["state"]
             client = WebClient()  # no prepared token needed for this
-            
+
             # Complete the installation by calling oauth.v2.access API method
             oauth_response = client.oauth_v2_access(
-                client_id= os.environ["SLACK_CLIENT_ID"],
-                client_secret=client_secret,
-                redirect_uri="https://d7a4-2401-4900-1cc9-1e5d-adcb-48a8-4595-2767.ngrok-free.app/slack/oauth_redirect",
+                client_id= slack_client_id,
+                client_secret=slack_client_secret,
+                redirect_uri=f"{tyke_slack_url}/slack/oauth_redirect",
                 code=request.args["code"]
             )
 
@@ -723,9 +708,9 @@ def oauth_callback():
             incoming_webhook = oauth_response.get("incoming_webhook", {})
 
             bot_token = oauth_response.get("access_token")
-            
+
             if installed_enterprise is None:
-                installed_enterprise={'id':None, 'name':None}
+                installed_enterprise = {'id': None, 'name': None}
             # NOTE: oauth.v2.access doesn't include bot_id in response
             bot_id = None
             enterprise_url = None
@@ -735,11 +720,12 @@ def oauth_callback():
                 if is_enterprise_install is True:
                     enterprise_url = auth_test.get("url")
 
-            state='asdfghjkl'
-            get_row = ExecuteQuery(f"SELECT tyke_user_token FROM slack_info WHERE state='{state}'")
+            #state = 'asdfghjkl'
+            get_row = ExecuteQuery(
+                f"SELECT tyke_user_token FROM slack_info WHERE state='{state}'")
             print("DB Response:", get_row)
-         
-            update_query= "UPDATE slack_info SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE state='{}'".format(
+
+            update_query = "UPDATE slack_info SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE state='{}'".format(
                 oauth_response.get("app_id"),
                 installed_enterprise.get("id"),
                 enterprise_url,
@@ -750,10 +736,10 @@ def oauth_callback():
                 oauth_response.get("bot_user_id"),
                 installer.get("id"),
                 installer.get("access_token"),
-                '2023',
-                'asdfghjkl'
+                time.time(),
+                state
             )
-            update_row= ExecuteQuery(update_query)
+            update_row = ExecuteQuery(update_query)
 
             installation = Installation(
                 app_id=oauth_response.get("app_id"),
@@ -765,19 +751,18 @@ def oauth_callback():
                 bot_token=bot_token,
                 bot_id=bot_id,
                 bot_user_id=oauth_response.get("bot_user_id"),
-                bot_scopes=oauth_response.get("scope"),  # comma-separated string
+                bot_scopes=oauth_response.get(
+                    "scope"),  # comma-separated string
                 user_id=installer.get("id"),
                 user_token=installer.get("access_token"),
                 user_scopes=installer.get("scope"),  # comma-separated string
                 incoming_webhook_url=incoming_webhook.get("url"),
                 incoming_webhook_channel=incoming_webhook.get("channel"),
                 incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
-                incoming_webhook_configuration_url=incoming_webhook.get("configuration_url"),
+                incoming_webhook_configuration_url=incoming_webhook.get(
+                    "configuration_url"),
                 is_enterprise_install=is_enterprise_install,
-                token_type=oauth_response.get("token_type"),
-                custom_values={
-                'tyke_user_token': get_row[0][0]
-                }
+                token_type=oauth_response.get("token_type")
             )
             print(installation)
             # Store the installation
@@ -790,22 +775,27 @@ def oauth_callback():
     error = request.args["error"] if "error" in request.args else ""
     return make_response(f"Something is wrong with the installation (error: {error})", 400)
 
+
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
 
     return handler.handle(request)
 
+
 @flask_app.route("/listtestsuite", methods=["POST"])
 def list_test_suite():
     return handler.handle(request)
+
 
 @flask_app.route("/slack/interactive-endpoint", methods=["POST"])
 def slack_interactive_endpoint():
     return handler.handle(request)
 
+
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_redirect():
     return handler.handle(request)
+
 
 @flask_app.route("/slack/install", methods=["GET"])
 def slack_install():
@@ -814,6 +804,6 @@ def slack_install():
 
 if __name__ == '__main__':
     flask_app.run(host='0.0.0.0', port=6000)
-    #flask_app.run(host='0.0.0.0', port=6000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
+    # flask_app.run(host='0.0.0.0', port=6000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
 
 # Start your app
