@@ -5,7 +5,7 @@ from flask import Flask, request, make_response
 from slack_sdk.web import WebClient
 from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
 from slack_sdk.oauth import AuthorizeUrlGenerator
-from flask import Flask, request
+from flask import Flask, request, redirect
 import logging
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
@@ -22,6 +22,7 @@ from slack_bolt.oauth.oauth_settings import OAuthSettings
 from slack_sdk.oauth.installation_store import FileInstallationStore
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 import time
+
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
@@ -95,7 +96,7 @@ headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGci
 
 
 @app.middleware  # or app.use(log_request)
-def log_request(client, body, next, logger):
+def middleware(client, body, next, logger):
     logger.debug(body)
     try:
         health = api_request(method='GET', url=API_HEALTH, headers=headers)
@@ -108,23 +109,23 @@ def log_request(client, body, next, logger):
     return next()
 
 
-@app.middleware  # or app.use(log_request)
-def log_request(logger, body, context, payload, next):
-    logger.info(body)
-    logger.info(context)
-    logger.info(payload)
+# @app.middleware  # or app.use(log_request)
+# def log_request(logger, body, context, payload, next):
+#     logger.info(body)
+#     logger.info(context)
+#     logger.info(payload)
 
-    if "user" in body:
-        team_id = body['user']['team_id']
-        user_id = body['user']['id']
-    else:
-        team_id = body['team_id']
-        user_id = body['user_id']
-    install_store = installation_store.find_installation(
-        enterprise_id=None, team_id=team_id, user_id=user_id)
-    headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
-    print("Header", headers)
-    return next()
+#     if "user" in body:
+#         team_id = body['user']['team_id']
+#         user_id = body['user']['id']
+#     else:
+#         team_id = body['team_id']
+#         user_id = body['user_id']
+#     install_store = installation_store.find_installation(
+#         enterprise_id=None, team_id=team_id, user_id=user_id)
+#     headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
+#     print("Header", headers)
+#     return next()
 
 
 @app.event("app_mention")
@@ -761,14 +762,14 @@ def oauth_callback():
                 incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
                 incoming_webhook_configuration_url=incoming_webhook.get(
                     "configuration_url"),
-                is_enterprise_install=is_enterprise_install,
-                token_type=oauth_response.get("token_type")
+                is_enterprise_install= is_enterprise_install,
+                token_type= oauth_response.get("token_type")
             )
             print(installation)
             # Store the installation
             installation_store.save(installation)
 
-            return "Thanks for installing this app!"
+            return redirect(tyke_api_url+"/slack/success")
         else:
             return make_response(f"Try the installation again (the state value is already expired)", 400)
 

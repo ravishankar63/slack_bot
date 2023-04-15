@@ -1,4 +1,7 @@
 import os 
+from dotenv import load_dotenv
+load_dotenv()
+
 URL= os.environ['TYKE_API']
 API_HEALTH=f"{URL}/api/health"
 API_GET_WORKSPACES = f"{URL}/api/workspace?mini=true&" 
