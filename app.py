@@ -1,6 +1,7 @@
 from api_request import api_request
 from config import *
 import psycopg2
+from flask_cors import CORS, cross_origin
 from flask import Flask, request, make_response
 from slack_sdk.web import WebClient
 from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
@@ -22,15 +23,19 @@ from slack_bolt.oauth.oauth_settings import OAuthSettings
 from slack_sdk.oauth.installation_store import FileInstallationStore
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 import time
-
+from url_generate import url_generate
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
+
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import datetime
 
 
 slack_client_secret = os.environ["SLACK_CLIENT_SECRET"]
 slack_client_id = os.environ["SLACK_CLIENT_ID"]
 slack_signing_secret = os.environ["SLACK_SIGNING_SECRET"]
 tyke_api_url = os.environ['TYKE_API']
+tyke_ui_url = os.environ['TYKE_UI']
 tyke_slack_url = os.environ['TYKE_SLACK']
 
 
@@ -92,40 +97,39 @@ app = App(
     oauth_settings=oauth_settings,
 )
 
-headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQ1OTRhMjA5LTY4NDUtNDkyMy04NWY1LTkxZjBkZTU3NWI5MSIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW5AdHlrZS5haSIsInNlc3Npb25faWQiOiJjMGRiM2EwZS1jOTYwLTQzZWUtOThiNC1jMTBhMGJkOWIzOWQiLCJyb2xlIjoiQWRtaW4iLCJpc3N1ZWRfYXQiOiIyMDIzLTAzLTI0VDA1OjE0OjU4Ljk0NTU3ODY0MVoiLCJleHBpcmVkX2F0IjoiMjAyMy0wMy0yNVQwNToxNDo1OC45NDU1NzkxMjNaIn0.QrLe4ccjb203bNsWiVHEjK5fndKGAKZHddPEchit9kI'}
+headers = {'Content-type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImYxNTU5NWJjLTI3MGItNDgyYS1hYjRkLTcyOWRhZjFjYmIxMSIsInVzZXJfaWQiOjksInVzZXJuYW1lIjoicmF2aS5jaGFuZHJhbkB0eWtlLmFpIiwic2Vzc2lvbl9pZCI6ImQxZGI3Njk0LTgwNmQtNDllOC1hNDJjLTUyNzA1MzU5Njk0ZCIsInJvbGUiOiJBZG1pbiIsImlzc3VlZF9hdCI6IjIwMjMtMDQtMTVUMTA6MTk6MjAuOTAwMTMxNzE4WiIsImV4cGlyZWRfYXQiOiIyMDIzLTA0LTE2VDEwOjE5OjIwLjkwMDEzMTg1N1oifQ.BeVXJ_bNxhAPOhnFqMRc_0blABUgznZSluRgZobBd5w'}
 
 
 @app.middleware  # or app.use(log_request)
 def middleware(client, body, next, logger):
-    logger.debug(body)
+    #logger.debug(body)   
+    if "user" in body:
+        team_id = body['user']['team_id']
+        user_id = body['user']['id']
+    elif "user_id" in body:
+        team_id = body['team_id']
+        user_id = body['user_id']
+    else:
+        pass
+    install_store = installation_store.find_installation(
+        enterprise_id=None, team_id=team_id, user_id=user_id)
+    headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
+    print(install_store.custom_values['tyke_user_token'])
     try:
         health = api_request(method='GET', url=API_HEALTH, headers=headers)
     except requests.exceptions.HTTPError as e:
-        print(e.response.status_code)
+        print("Reached",e.response.status_code)
         if e.response.status_code == 401:
             views = json.load(open('./user-interface/modals/login.json'))
-            client.views_open(
+            res = client.views_open(
                 trigger_id=body["trigger_id"], view=json.dumps(views))
+
+            views['blocks'][0]['accessory']['url']= url_generate(user_id=install_store.custom_values['user_id'], redirect_uri=tyke_slack_url+"/slack/oauth_post")
+            client.views_update(
+                view_id= res['view']['id'], view= views 
+                )
+
     return next()
-
-
-# @app.middleware  # or app.use(log_request)
-# def log_request(logger, body, context, payload, next):
-#     logger.info(body)
-#     logger.info(context)
-#     logger.info(payload)
-
-#     if "user" in body:
-#         team_id = body['user']['team_id']
-#         user_id = body['user']['id']
-#     else:
-#         team_id = body['team_id']
-#         user_id = body['user_id']
-#     install_store = installation_store.find_installation(
-#         enterprise_id=None, team_id=team_id, user_id=user_id)
-#     headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
-#     print("Header", headers)
-#     return next()
 
 
 @app.event("app_mention")
@@ -145,6 +149,10 @@ def say_hello(message, say):
 def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
+    views = json.load(open('./user-interface/modals/test-suite-creation.json'))
+
+    res = client.views_open(
+        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -155,8 +163,6 @@ def open_modal(ack, shortcut, client, logger):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
     tags_list = list(map(lambda x: {'name': x['name'], 'id': x['id']}, tags_res['data']))
-
-    views = json.load(open('./user-interface/modals/test-suite-creation.json'))
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -171,8 +177,9 @@ def open_modal(ack, shortcut, client, logger):
         },
         'value': x['id']}, tags_list))
 
-    client.views_open(
-        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
     with open('./user-interface/modals/test-suite-creation.json', "w") as outfile:
         json.dump(views, outfile)
 
@@ -271,6 +278,11 @@ def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
 
+
+    views = json.load(
+        open('./user-interface/modals/api-collection-creation.json'))
+    res = client.views_open(
+        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -280,8 +292,6 @@ def open_modal(ack, shortcut, client, logger):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(
-        open('./user-interface/modals/api-collection-creation.json'))
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -289,9 +299,10 @@ def open_modal(ack, shortcut, client, logger):
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
-
-    client.views_open(
-        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
+    
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
 
     with open('./user-interface/modals/api-collection-creation.json', "w") as outfile:
         json.dump(views, outfile)
@@ -376,6 +387,9 @@ def handle_submission(ack, body, client, view, logger):
 def open_modal(ack, logger, body, client):
     # Acknowledge command request
     ack()
+    views = json.load(open('./user-interface/modals/list-test-suite.json'))
+    res = client.views_open(
+        trigger_id=body["trigger_id"], view=json.dumps(views))
     logger.info(body)
     try:
         workspace_res = api_request(
@@ -386,17 +400,17 @@ def open_modal(ack, logger, body, client):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(open('./user-interface/modals/list-test-suite.json'))
-
     views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
             "text": x['name']
         },
         'value': x['id']}, workspace_list))
+    
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
 
-    client.views_open(
-        trigger_id=body["trigger_id"], view=json.dumps(views))
 
 
 @app.view("list-test-suite")
@@ -430,7 +444,9 @@ def handle_submission(ack, body, client, view, logger):
 def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
-
+    views = json.load(open('./user-interface/modals/execute-test-suite.json'))
+    res = client.views_open(
+        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -439,8 +455,6 @@ def open_modal(ack, shortcut, client, logger):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(open('./user-interface/modals/execute-test-suite.json'))
-
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
@@ -448,9 +462,9 @@ def open_modal(ack, shortcut, client, logger):
         },
         'value': x['id']}, workspace_list))
 
-    client.views_open(
-        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
     with open('./user-interface/modals/execute-test-suite.json', "w") as outfile:
         json.dump(views, outfile)
 
@@ -521,7 +535,9 @@ def handle_submission(ack, body, client, view, logger):
 def open_modal(ack, shortcut, client, logger):
     # Acknowledge the shortcut request
     ack()
-
+    views = json.load(open('./user-interface/modals/export-test-cases.json'))
+    res = client.views_open(
+        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -531,7 +547,7 @@ def open_modal(ack, shortcut, client, logger):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(open('./user-interface/modals/export-test-cases.json'))
+
 
     views['blocks'][0]['elements'][0]['options'] = list(map(lambda x: {
         'text': {
@@ -540,9 +556,9 @@ def open_modal(ack, shortcut, client, logger):
         },
         'value': x['id']}, workspace_list))
 
-    client.views_open(
-        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
     with open('./user-interface/modals/export-test-cases.json', "w") as outfile:
         json.dump(views, outfile)
 
@@ -611,6 +627,12 @@ def handle_submission(ack, body, client, view, logger):
 def open_modal(ack, shortcut, client, logger):
 
     ack()
+
+    views = json.load(
+        open('./user-interface/modals/list-api-collections.json'))
+    res= client.views_open(
+        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
+    
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -619,9 +641,6 @@ def open_modal(ack, shortcut, client, logger):
     workspace_list = list(
         map(lambda x: {'name': x['name'], 'id': x['id']}, workspace_res['data']))
 
-    views = json.load(
-        open('./user-interface/modals/list-api-collections.json'))
-
     views['blocks'][0]['element']['options'] = list(map(lambda x: {
         'text': {
             "type": "plain_text",
@@ -629,9 +648,9 @@ def open_modal(ack, shortcut, client, logger):
         },
         'value': x['id']}, workspace_list))
 
-    client.views_open(
-        trigger_id=shortcut["trigger_id"], view=json.dumps(views))
-
+    client.views_update(
+        view_id= res['view']['id'], view= views 
+    )
     with open('./user-interface/modals/list-api-collections.json', "w") as outfile:
         json.dump(views, outfile)
 
@@ -671,10 +690,8 @@ def handle_app_home_opened_events(body, logger, client):
 
 
 flask_app = Flask(__name__)
+cors = CORS(flask_app)
 handler = SlackRequestHandler(app)
-
-
-
 
 @flask_app.route("/slack/install", methods=["GET"])
 def oauth_start():
@@ -684,13 +701,12 @@ def oauth_start():
     return f'<a href="{url}">' \
            f'<img alt=""Add to Slack"" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>'
 
-
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_callback():
     # Retrieve the auth code and state from the request params
     if "code" in request.args:
         # Verify the state parameter
-        if state_store.consume(request.args["state"]):
+        if request.args["state"]:
             state = request.args["state"]
             client = WebClient()  # no prepared token needed for this
 
@@ -707,7 +723,6 @@ def oauth_callback():
             installed_team = oauth_response.get("team", {})
             installer = oauth_response.get("authed_user", {})
             incoming_webhook = oauth_response.get("incoming_webhook", {})
-
             bot_token = oauth_response.get("access_token")
 
             if installed_enterprise is None:
@@ -722,11 +737,11 @@ def oauth_callback():
                     enterprise_url = auth_test.get("url")
 
             #state = 'asdfghjkl'
-            get_row = ExecuteQuery(
-                f"SELECT tyke_user_token FROM slack_info WHERE state='{state}'")
-            print("DB Response:", get_row)
+            # get_row = ExecuteQuery(
+            #     f"SELECT tyke_user_token FROM slack_user WHERE state='{state}'")
+            # print("DB Response:", get_row)
 
-            update_query = "UPDATE slack_info SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE state='{}'".format(
+            update_query = "UPDATE slack_user SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE user_uuid='{}'".format(
                 oauth_response.get("app_id"),
                 installed_enterprise.get("id"),
                 enterprise_url,
@@ -763,48 +778,62 @@ def oauth_callback():
                 incoming_webhook_configuration_url=incoming_webhook.get(
                     "configuration_url"),
                 is_enterprise_install= is_enterprise_install,
-                token_type= oauth_response.get("token_type")
+                token_type= oauth_response.get("token_type"),
+                custom_values={
+                'tyke_user_token':'',
+                'user_id': state
+                }
             )
             print(installation)
             # Store the installation
             installation_store.save(installation)
 
-            return redirect(tyke_api_url+"/slack/success")
+            return redirect(tyke_ui_url+"/slack/success")
         else:
             return make_response(f"Try the installation again (the state value is already expired)", 400)
 
     error = request.args["error"] if "error" in request.args else ""
     return make_response(f"Something is wrong with the installation (error: {error})", 400)
 
-
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
 
     return handler.handle(request)
 
-
 @flask_app.route("/listtestsuite", methods=["POST"])
 def list_test_suite():
     return handler.handle(request)
-
 
 @flask_app.route("/slack/interactive-endpoint", methods=["POST"])
 def slack_interactive_endpoint():
     return handler.handle(request)
 
-
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_redirect():
     return handler.handle(request)
-
 
 @flask_app.route("/slack/install", methods=["GET"])
 def slack_install():
     return handler.handle(request)
 
+@flask_app.route("/slack/oauth_post", methods=["POST"])
+def oauth_post():
+    # print("Reached")
+    body = request.json
+    try:
+        get_row = ExecuteQuery(
+                f"SELECT team_id, slack_user_id, enterprise_id FROM slack_user WHERE user_uuid='{body['user']}'")
+        
+        installation = installation_store.find_installation(team_id=get_row[0][0], user_id= get_row[0][1], enterprise_id=None)
+        installation.custom_values['tyke_user_token']=f"Bearer {body['access_token']}"
+        installation_store.save(installation) 
+        return make_response("Success", 201)       
+    except Exception as e:
+        return make_response("Error:{e}", 400)
+
 
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=6000)
+    flask_app.run(host='0.0.0.0', port=8000)
     # flask_app.run(host='0.0.0.0', port=6000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
 
 # Start your app

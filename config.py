@@ -7,6 +7,5 @@ TESTS_STORE= "127.0.0.1"
 # tests_store: 44.211.22.58
 # db_port: 3306
 DB_PORT= 5432
-TYKE_API="dev.tyke.ai"
-TYKE_SLACK="slack.tyke.ai"
+
 

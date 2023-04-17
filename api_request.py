@@ -12,6 +12,8 @@ def api_request(method, url, headers=None, params=None, data=None, json=None):
             json=json
         )
         response.raise_for_status()  # Raise an exception for non-2xx response codes
+        print("API Req")
+        print(response.json())
         return response.json()
     except requests.exceptions.HTTPError as err:
         print(f"HTTP Error: {err}")

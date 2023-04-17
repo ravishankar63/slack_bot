@@ -1,0 +1,33 @@
+{
+	"type": "modal",
+	"title": {
+		"type": "plain_text",
+		"text": "Tyke Login",
+		"emoji": true
+	},
+	"close": {
+		"type": "plain_text",
+		"text": "Close",
+		"emoji": true
+	},
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Please login to start using tyke application"
+			},
+			"accessory": {
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "Take Me",
+					"emoji": true
+				},
+				"value": "click_me_123",
+				"url": "https://dev.tyke.ai/login",
+				"action_id": "button-action"
+			}
+		}
+	]
+}
