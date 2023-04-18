@@ -21,11 +21,11 @@
 				"type": "button",
 				"text": {
 					"type": "plain_text",
-					"text": "Take Me",
+					"text": "Login",
 					"emoji": true
 				},
 				"value": "click_me_123",
-				"url": "https://dev.tyke.ai/login",
+				"url": "https://test.tyke.ai/slack/login",
 				"action_id": "button-action"
 			}
 		}

@@ -27,7 +27,6 @@ from url_generate import url_generate
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 import datetime
 
 
@@ -113,7 +112,7 @@ def middleware(client, body, next, logger):
         pass
     install_store = installation_store.find_installation(
         enterprise_id=None, team_id=team_id, user_id=user_id)
-    headers['Authorization'] = f"Bearer {install_store.custom_values['tyke_user_token']}"
+    headers['Authorization'] = f"{install_store.custom_values['tyke_user_token']}"
     print(install_store.custom_values['tyke_user_token'])
     try:
         health = api_request(method='GET', url=API_HEALTH, headers=headers)
@@ -153,6 +152,7 @@ def open_modal(ack, shortcut, client, logger):
 
     res = client.views_open(
         trigger_id=shortcut["trigger_id"], view=json.dumps(views))
+    print("Headers",headers)
     try:
         workspace_res = api_request(
             method='GET', url=API_GET_WORKSPACES, headers=headers)
@@ -736,12 +736,13 @@ def oauth_callback():
                 if is_enterprise_install is True:
                     enterprise_url = auth_test.get("url")
 
-            #state = 'asdfghjkl'
-            # get_row = ExecuteQuery(
-            #     f"SELECT tyke_user_token FROM slack_user WHERE state='{state}'")
-            # print("DB Response:", get_row)
+       
+            get_row = ExecuteQuery(
+                "SELECT id FROM tyke.user WHERE uuid='{}'".format(state))
+      
 
-            update_query = "UPDATE slack_user SET app_id= '{}', enterprise_id='{}', enterprise_url='{}', team_id= '{}', team_name='{}', bot_token='{}', bot_id='{}', bot_user_id='{}', slack_user_id='{}', slack_user_token='{}', installed_at='{}' WHERE user_uuid='{}'".format(
+            insert_query="INSERT INTO tyke.slack_users ( user_id, app_id, enterprise_id, enterprise_url, team_id, team_name, bot_token, bot_id, bot_user_id, slack_user_id, slack_user_token, installed_at) VALUES( {}, '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}');".format(
+                get_row[0][0],
                 oauth_response.get("app_id"),
                 installed_enterprise.get("id"),
                 enterprise_url,
@@ -752,10 +753,9 @@ def oauth_callback():
                 oauth_response.get("bot_user_id"),
                 installer.get("id"),
                 installer.get("access_token"),
-                time.time(),
-                state
+                time.time()
             )
-            update_row = ExecuteQuery(update_query)
+            update_row = ExecuteQuery(insert_query)
 
             installation = Installation(
                 app_id=oauth_response.get("app_id"),
@@ -821,8 +821,12 @@ def oauth_post():
     # print("Reached")
     body = request.json
     try:
+        get_user = ExecuteQuery(
+                "SELECT id FROM tyke.user WHERE uuid='{}'".format(body['user']))
+      
+
         get_row = ExecuteQuery(
-                f"SELECT team_id, slack_user_id, enterprise_id FROM slack_user WHERE user_uuid='{body['user']}'")
+                f"SELECT team_id, slack_user_id, enterprise_id FROM tyke.slack_users WHERE user_id='{get_user[0][0]}'")
         
         installation = installation_store.find_installation(team_id=get_row[0][0], user_id= get_row[0][1], enterprise_id=None)
         installation.custom_values['tyke_user_token']=f"Bearer {body['access_token']}"
@@ -833,7 +837,7 @@ def oauth_post():
 
 
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=8000)
-    # flask_app.run(host='0.0.0.0', port=6000, ssl_context=("/home/ubuntu/certs/tyke.ai.crt", "/home/ubuntu/certs/tyke.ai.key") )
+    flask_app.run(host='0.0.0.0', port= SLACK_API_PORT)
+    #flask_app.run(host='0.0.0.0', port=SLACK_API_PORT, ssl_context=("/etc/ssl/tyke.ai.crt", "/etc/ssl/tyke.ai.key") )
 
 # Start your app
